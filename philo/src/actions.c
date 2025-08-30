@@ -12,79 +12,92 @@
 
 #include "philo.h"
 
-int	eat(t_philo *philo)
+int	execute_eating_process(t_philosopher_data *current_philosopher)
 {
 	long long	current_time;
 
-	if (!check_and_take_both_forks_safe(philo))
+	if (!attempt_both_forks_acquisition(current_philosopher))
 	{
-		philo_think(philo);
+		begin_thinking_phase(current_philosopher);
 		return (0);
 	}
-	pthread_mutex_lock(&philo->data->death);
-	philo->state = PHILO_EATING;
-	pthread_mutex_unlock(&philo->data->death);
-	print_status(philo, MSG_EAT);
-	current_time = get_time();
-	pthread_mutex_lock(&philo->data->meal_lock);
-	philo->last_eat_time = current_time;
-	pthread_mutex_unlock(&philo->data->meal_lock);
-	ft_usleep(philo->data->time_to_eat);
-	pthread_mutex_lock(&philo->data->meal_lock);
-	philo->eat_count++;
-	pthread_mutex_unlock(&philo->data->meal_lock);
-	release_both_forks(philo, 0, 0);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	current_philosopher->current_state = STATE_EATING;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	print_philosopher_state(current_philosopher, MSG_EAT);
+	current_time = get_current_timestamp();
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		meal_tracking_mutex);
+	current_philosopher->last_meal_timestamp = current_time;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		meal_tracking_mutex);
+	precise_sleep_duration(current_philosopher->shared_table_data->
+		eating_duration);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		meal_tracking_mutex);
+	current_philosopher->total_meals_eaten++;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		meal_tracking_mutex);
+	release_both_dining_forks(current_philosopher, 0, 0);
 	return (1);
 }
 
-void	philo_sleep(t_philo *philo)
+void	enter_sleeping_state(t_philosopher_data *current_philosopher)
 {
-	if (check_death(philo))
+	if (check_philosopher_death(current_philosopher))
 		return ;
-	pthread_mutex_lock(&philo->data->death);
-	philo->state = PHILO_SLEEPING;
-	pthread_mutex_unlock(&philo->data->death);
-	print_status(philo, MSG_SLEEP);
-	ft_usleep(philo->data->time_to_sleep);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	current_philosopher->current_state = STATE_SLEEPING;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	print_philosopher_state(current_philosopher, MSG_SLEEP);
+	precise_sleep_duration(current_philosopher->shared_table_data->
+		sleeping_duration);
 }
 
-void	philo_think(t_philo *philo)
+void	begin_thinking_phase(t_philosopher_data *current_philosopher)
 {
-	if (check_death(philo))
+	if (check_philosopher_death(current_philosopher))
 		return ;
-	pthread_mutex_lock(&philo->data->death);
-	philo->state = PHILO_THINKING;
-	pthread_mutex_unlock(&philo->data->death);
-	print_status(philo, MSG_THINK);
-	adjust_think_time(philo);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	current_philosopher->current_state = STATE_THINKING;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		death_check_mutex);
+	print_philosopher_state(current_philosopher, MSG_THINK);
+	adjust_thinking_duration(current_philosopher);
 }
 
-void	adjust_think_time(t_philo *philo)
+void	adjust_thinking_duration(t_philosopher_data *current_philosopher)
 {
 	int	wait_time;
 
-	if (philo->data->num_philos % 2 == 1)
+	if (current_philosopher->shared_table_data->number_of_diners % 2 == 1)
 	{
-		if (philo->data->time_to_die <= 500)
-			ft_usleep(5);
+		if (current_philosopher->shared_table_data->time_before_death <= 500)
+			precise_sleep_duration(5);
 		else
 		{
-			if (philo->id % 2 == 0)
+			if (current_philosopher->unique_number % 2 == 0)
 			{
-				wait_time = philo->data->time_to_eat / 4;
-				ft_usleep(wait_time);
+				wait_time = current_philosopher->shared_table_data->
+					eating_duration / 4;
+				precise_sleep_duration(wait_time);
 			}
 		}
 	}
 	else
-		ft_usleep(5);
+		precise_sleep_duration(5);
 }
 
-void	sleep_and_think(t_philo *philo)
+void	execute_sleep_and_think_cycle(t_philosopher_data *current_philosopher)
 {
-	philo_sleep(philo);
-	if (check_death(philo))
+	enter_sleeping_state(current_philosopher);
+	if (check_philosopher_death(current_philosopher))
 		return ;
-	philo_think(philo);
-	try_get_forks(philo);
+	begin_thinking_phase(current_philosopher);
+	attempt_fork_acquisition(current_philosopher);
 }

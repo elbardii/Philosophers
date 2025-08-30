@@ -12,62 +12,80 @@
 
 #include "philo.h"
 
-static void *philo_simulation_loop(t_philo *philo);
+static void	*execute_philosopher_simulation_loop(
+		t_philosopher_data *current_philosopher);
 
-void *philo_routine(void *arg)
+void	*philosopher_routine(void *arg)
 {
-    t_philo *philo;
+	t_philosopher_data	*current_philosopher;
 
-    philo = (t_philo *)arg;
-    pthread_mutex_lock(&philo->data->start_lock);
-    pthread_mutex_unlock(&philo->data->start_lock);
-    if (philo->data->single_philo)
-        return (print_status(philo, MSG_FORK), ft_usleep(philo->data->time_to_die), NULL);
-    if (philo->id % 2 == 0)
-    {
-        ft_usleep(philo->data->time_to_eat / 2);
-        philo_think(philo);
-        try_get_forks(philo);
-    }
-    return (philo_simulation_loop(philo));
+	current_philosopher = (t_philosopher_data *)arg;
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		start_synchronization_mutex);
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		start_synchronization_mutex);
+	if (current_philosopher->shared_table_data->single_philosopher_mode)
+		return (print_philosopher_state(current_philosopher, MSG_FORK), 
+			precise_sleep_duration(current_philosopher->shared_table_data->
+				time_before_death), NULL);
+	if (current_philosopher->unique_number % 2 == 0)
+	{
+		precise_sleep_duration(current_philosopher->shared_table_data->
+			eating_duration / 2);
+		begin_thinking_phase(current_philosopher);
+		attempt_fork_acquisition(current_philosopher);
+	}
+	return (execute_philosopher_simulation_loop(current_philosopher));
 }
 
-static void *philo_simulation_loop(t_philo *philo)
+static void	*execute_philosopher_simulation_loop(
+		t_philosopher_data *current_philosopher)
 {
-    while (get_simulation_state(philo->data) == SIM_RUNNING)
-    {
-        if (eat(philo))
-        {
-            if (get_simulation_state(philo->data) != SIM_RUNNING)
-                break;
-            sleep_and_think(philo);
-        }
-        else
-        {
-            if (philo->id == philo->data->num_philos)
-                ft_usleep(philo->data->time_to_eat);
-            else
-                ft_usleep(philo->data->time_to_eat / 2);
-        }
-    }
-    return (NULL);
+	while (get_current_simulation_state(current_philosopher->
+		shared_table_data) == SIM_RUNNING)
+	{
+		if (execute_eating_process(current_philosopher))
+		{
+			if (get_current_simulation_state(current_philosopher->
+				shared_table_data) != SIM_RUNNING)
+				break ;
+			execute_sleep_and_think_cycle(current_philosopher);
+		}
+		else
+		{
+			if (current_philosopher->unique_number == current_philosopher->
+				shared_table_data->number_of_diners)
+				precise_sleep_duration(current_philosopher->shared_table_data->
+					eating_duration);
+			else
+				precise_sleep_duration(current_philosopher->shared_table_data->
+					eating_duration / 2);
+		}
+	}
+	return (NULL);
 }
 
-int	handle_thread_creation_error(t_data *data, char *err_msg)
+int	handle_thread_creation_error(t_table_config *table_data, char *err_msg)
 {
-	data->is_dead = 1;
-	set_simulation_state(data, SIM_ERROR);
+	table_data->death_flag_detected = 1;
+	set_simulation_state(table_data, SIM_ERROR);
 	printf("%s\n", err_msg);
-	return (pthread_mutex_unlock(&data->start_lock), handle_termination(data),
-		free_resources(data), 1);
+	return (pthread_mutex_unlock(&table_data->start_synchronization_mutex), 
+		handle_simulation_termination(table_data),
+		free_simulation_resources(table_data), 1);
 }
 
-void	print_status(t_philo *philo, char *status)
+void	print_philosopher_state(t_philosopher_data *current_philosopher, 
+		char *status)
 {
-	long long	time;
+	long long	current_time;
 
-	pthread_mutex_lock(&philo->data->print);
-	time = time_elapsed(philo->data->start_time);
-	printf("%lld %d %s\n", time, philo->id, status);
-	pthread_mutex_unlock(&philo->data->print);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		print_output_mutex);
+	current_time = calculate_time_elapsed(current_philosopher->
+		shared_table_data->simulation_start_time);
+	printf("%lld %d %s\n", current_time, current_philosopher->unique_number, 
+		status);
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		print_output_mutex);
 }

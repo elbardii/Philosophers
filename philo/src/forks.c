@@ -12,108 +12,146 @@
 
 #include "philo.h"
 
+static int	attempt_and_acquire_both_forks(
+		t_philosopher_data *current_philosopher, int first_fork, 
+		int second_fork);
 
-static int	check_and_take_both_forks(t_philo *philo, int first_fork, int second_fork);
-
-int	can_take_fork(t_philo *philo, int fork_index)
+int	check_fork_availability(t_philosopher_data *current_philosopher, 
+		int fork_index)
 {
-	int	can_take;
+	int	fork_available;
 
-	pthread_mutex_lock(&philo->data->forks[fork_index].mutex);
-	can_take = (philo->data->forks[fork_index].state == FORK_AVAILABLE);
-	pthread_mutex_unlock(&philo->data->forks[fork_index].mutex);
-	return (can_take);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_mutex);
+	fork_available = (current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_state == FORK_AVAILABLE);
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_mutex);
+	return (fork_available);
 }
 
-int	take_fork_safe(t_philo *philo, int fork_index)
+int	acquire_fork_safely(t_philosopher_data *current_philosopher, 
+		int fork_index)
 {
-	pthread_mutex_lock(&philo->data->forks[fork_index].mutex);
-	if (philo->data->forks[fork_index].state == FORK_AVAILABLE)
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_mutex);
+	if (current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_state == FORK_AVAILABLE)
 	{
-		philo->data->forks[fork_index].state = FORK_IN_USE;
-		philo->data->forks[fork_index].owner_id = philo->id;
-		pthread_mutex_unlock(&philo->data->forks[fork_index].mutex);
-		print_status(philo, MSG_FORK);
+		current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].fork_state = FORK_IN_USE;
+		current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].owner_philosopher_id = 
+			current_philosopher->unique_number;
+		pthread_mutex_unlock(&current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].fork_mutex);
+		print_philosopher_state(current_philosopher, MSG_FORK);
 		return (1);
 	}
-	else if (philo->id == philo->data->num_philos && 
-			time_since_last_meal(philo) > (philo->data->time_to_die * 3 / 4))
+	else if (current_philosopher->unique_number == current_philosopher->
+		shared_table_data->number_of_diners && 
+		calculate_time_since_last_meal(current_philosopher) > 
+		(current_philosopher->shared_table_data->time_before_death * 3 / 4))
 	{
-		philo->data->forks[fork_index].state = FORK_IN_USE;
-		philo->data->forks[fork_index].owner_id = philo->id;
-		pthread_mutex_unlock(&philo->data->forks[fork_index].mutex);
-		print_status(philo, MSG_FORK);
+		current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].fork_state = FORK_IN_USE;
+		current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].owner_philosopher_id = 
+			current_philosopher->unique_number;
+		pthread_mutex_unlock(&current_philosopher->shared_table_data->
+			fork_mutex_array[fork_index].fork_mutex);
+		print_philosopher_state(current_philosopher, MSG_FORK);
 		return (1);
 	}
-	pthread_mutex_unlock(&philo->data->forks[fork_index].mutex);
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		fork_mutex_array[fork_index].fork_mutex);
 	return (0);
 }
 
-int	check_and_take_both_forks_safe(t_philo *philo)
+int	attempt_both_forks_acquisition(t_philosopher_data *current_philosopher)
 {
-	if (is_dead(philo->data))
+	if (check_death_flag_status(current_philosopher->shared_table_data))
 		return (0);
-	if (philo->data->single_philo)
+	if (current_philosopher->shared_table_data->single_philosopher_mode)
 	{
-		take_fork_safe(philo, philo->left_fork);
-		ft_usleep(philo->data->time_to_die + 1);
+		acquire_fork_safely(current_philosopher, 
+			current_philosopher->left_fork_index);
+		precise_sleep_duration(current_philosopher->shared_table_data->
+			time_before_death + 1);
 		return (0);
 	}
-	return (check_and_take_both_forks(philo, 0, 0));
+	return (attempt_and_acquire_both_forks(current_philosopher, 0, 0));
 }
 
-static int	check_and_take_both_forks(t_philo *philo, int first_fork, int second_fork)
+static int	attempt_and_acquire_both_forks(
+		t_philosopher_data *current_philosopher, int first_fork, 
+		int second_fork)
 {
-	if (philo->id == philo->data->num_philos)
+	if (current_philosopher->unique_number == current_philosopher->
+		shared_table_data->number_of_diners)
 	{
-		first_fork = philo->left_fork;
-		second_fork = philo->right_fork;
+		first_fork = current_philosopher->left_fork_index;
+		second_fork = current_philosopher->right_fork_index;
 	}
-	else if (philo->id % 2 == 0)
+	else if (current_philosopher->unique_number % 2 == 0)
 	{
-		first_fork = philo->right_fork;
-		second_fork = philo->left_fork;
+		first_fork = current_philosopher->right_fork_index;
+		second_fork = current_philosopher->left_fork_index;
 	}
 	else
 	{
-		first_fork = philo->left_fork;
-		second_fork = philo->right_fork;
+		first_fork = current_philosopher->left_fork_index;
+		second_fork = current_philosopher->right_fork_index;
 	}
-	if (!take_fork_safe(philo, first_fork))
+	if (!acquire_fork_safely(current_philosopher, first_fork))
 		return (0);
-	if (!take_fork_safe(philo, second_fork))
+	if (!acquire_fork_safely(current_philosopher, second_fork))
 	{
-		pthread_mutex_lock(&philo->data->forks[first_fork].mutex);
-		philo->data->forks[first_fork].state = FORK_AVAILABLE;
-		philo->data->forks[first_fork].owner_id = -1;
-		return (pthread_mutex_unlock(&philo->data->forks[first_fork].mutex),0);
+		pthread_mutex_lock(&current_philosopher->shared_table_data->
+			fork_mutex_array[first_fork].fork_mutex);
+		current_philosopher->shared_table_data->
+			fork_mutex_array[first_fork].fork_state = FORK_AVAILABLE;
+		current_philosopher->shared_table_data->
+			fork_mutex_array[first_fork].owner_philosopher_id = -1;
+		return (pthread_mutex_unlock(&current_philosopher->shared_table_data->
+			fork_mutex_array[first_fork].fork_mutex), 0);
 	}
 	return (1);
 }
 
-void	release_both_forks(t_philo *philo, int first_fork, int second_fork)
+void	release_both_dining_forks(t_philosopher_data *current_philosopher, 
+		int first_fork, int second_fork)
 {
-	if (philo->id == philo->data->num_philos)
+	if (current_philosopher->unique_number == current_philosopher->
+		shared_table_data->number_of_diners)
 	{
-		first_fork = philo->right_fork;
-		second_fork = philo->left_fork;
+		first_fork = current_philosopher->right_fork_index;
+		second_fork = current_philosopher->left_fork_index;
 	}
-	else if (philo->id % 2 == 0)
+	else if (current_philosopher->unique_number % 2 == 0)
 	{
-		first_fork = philo->left_fork;
-		second_fork = philo->right_fork;
+		first_fork = current_philosopher->left_fork_index;
+		second_fork = current_philosopher->right_fork_index;
 	}
 	else
 	{
-		first_fork = philo->right_fork;
-		second_fork = philo->left_fork;
+		first_fork = current_philosopher->right_fork_index;
+		second_fork = current_philosopher->left_fork_index;
 	}
-	pthread_mutex_lock(&philo->data->forks[first_fork].mutex);
-	philo->data->forks[first_fork].state = FORK_AVAILABLE;
-	philo->data->forks[first_fork].owner_id = -1;
-	pthread_mutex_unlock(&philo->data->forks[first_fork].mutex);
-	pthread_mutex_lock(&philo->data->forks[second_fork].mutex);
-	philo->data->forks[second_fork].state = FORK_AVAILABLE;
-	philo->data->forks[second_fork].owner_id = -1;
-	pthread_mutex_unlock(&philo->data->forks[second_fork].mutex);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		fork_mutex_array[first_fork].fork_mutex);
+	current_philosopher->shared_table_data->
+		fork_mutex_array[first_fork].fork_state = FORK_AVAILABLE;
+	current_philosopher->shared_table_data->
+		fork_mutex_array[first_fork].owner_philosopher_id = -1;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		fork_mutex_array[first_fork].fork_mutex);
+	pthread_mutex_lock(&current_philosopher->shared_table_data->
+		fork_mutex_array[second_fork].fork_mutex);
+	current_philosopher->shared_table_data->
+		fork_mutex_array[second_fork].fork_state = FORK_AVAILABLE;
+	current_philosopher->shared_table_data->
+		fork_mutex_array[second_fork].owner_philosopher_id = -1;
+	pthread_mutex_unlock(&current_philosopher->shared_table_data->
+		fork_mutex_array[second_fork].fork_mutex);
 }

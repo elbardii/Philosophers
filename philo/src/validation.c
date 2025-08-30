@@ -12,22 +12,23 @@
 
 #include "philo.h"
 
-int	validate_args(int argc, char **argv)
+int	validate_command_arguments(int argc, char **argv)
 {
-	int	i;
-	int	j;
+	int	argument_index;
+	int	character_index;
 
-	i = 1;
-	while (i < argc)
+	argument_index = 1;
+	while (argument_index < argc)
 	{
-		j = 0;
-		while (argv[i][j])
+		character_index = 0;
+		while (argv[argument_index][character_index])
 		{
-			if (argv[i][j] < '0' || argv[i][j] > '9')
+			if (argv[argument_index][character_index] < '0' || 
+				argv[argument_index][character_index] > '9')
 				return (1);
-			j++;
+			character_index++;
 		}
-		i++;
+		argument_index++;
 	}
 	return (0);
 }

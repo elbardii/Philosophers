@@ -12,51 +12,52 @@
 
 #include "philo.h"
 
-int	free_resources(t_data *data)
+int	free_simulation_resources(t_table_config *table_data)
 {
-	if (data->philos)
+	if (table_data->philosophers_array)
 	{
-		free(data->philos);
-		data->philos = NULL;
+		free(table_data->philosophers_array);
+		table_data->philosophers_array = NULL;
 	}
-	if (data->forks)
+	if (table_data->fork_mutex_array)
 	{
-		cleanup_forks(data->forks, data->num_philos);
-		data->forks = NULL;
+		cleanup_fork_resources(table_data->fork_mutex_array, 
+			table_data->number_of_diners);
+		table_data->fork_mutex_array = NULL;
 	}
-	cleanup_single_mutex(&data->print);
-	cleanup_single_mutex(&data->death);
-	cleanup_single_mutex(&data->start_lock);
-	cleanup_single_mutex(&data->meal_lock);
+	cleanup_single_mutex(&table_data->print_output_mutex);
+	cleanup_single_mutex(&table_data->death_check_mutex);
+	cleanup_single_mutex(&table_data->start_synchronization_mutex);
+	cleanup_single_mutex(&table_data->meal_tracking_mutex);
 	return (0);
 }
 
 int	cleanup_single_mutex(pthread_mutex_t *mutex)
 {
-	int	result;
+	int	destruction_result;
 
-	result = pthread_mutex_destroy(mutex);
-	if (result == 0)
+	destruction_result = pthread_mutex_destroy(mutex);
+	if (destruction_result == 0)
 		return (0);
 	else
 		return (1);
 }
 
-int	cleanup_forks(t_fork *forks, int count)
+int	cleanup_fork_resources(t_dining_fork *forks, int count)
 {
-	int	i;
-	int	success;
+	int	fork_index;
+	int	cleanup_success;
 
-	i = 0;
-	success = 1;
-	while (i < count)
+	fork_index = 0;
+	cleanup_success = 1;
+	while (fork_index < count)
 	{
-		if (cleanup_single_mutex(&forks[i].mutex) != 0)
-			success = 0;
-		i++;
+		if (cleanup_single_mutex(&forks[fork_index].fork_mutex) != 0)
+			cleanup_success = 0;
+		fork_index++;
 	}
 	free(forks);
-	if (success)
+	if (cleanup_success)
 		return (0);
 	else
 		return (1);

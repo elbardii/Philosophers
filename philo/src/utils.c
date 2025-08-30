@@ -12,73 +12,75 @@
 
 #include "philo.h"
 
-int	ft_atoi(const char *str)
+int	convert_string_to_integer(const char *str)
 {
-	int	i;
-	int	sign;
-	int	result;
+	int	character_index;
+	int	sign_multiplier;
+	int	conversion_result;
 
-	i = 0;
-	sign = 1;
-	result = 0;
-	while (str[i] == ' ' || (str[i] >= 9 && str[i] <= 13))
-		i++;
-	if (str[i] == '-' || str[i] == '+')
+	character_index = 0;
+	sign_multiplier = 1;
+	conversion_result = 0;
+	while (str[character_index] == ' ' || (str[character_index] >= 9 
+		&& str[character_index] <= 13))
+		character_index++;
+	if (str[character_index] == '-' || str[character_index] == '+')
 	{
-		if (str[i] == '-')
-			sign = -1;
-		i++;
+		if (str[character_index] == '-')
+			sign_multiplier = -1;
+		character_index++;
 	}
-	while (str[i] >= '0' && str[i] <= '9')
+	while (str[character_index] >= '0' && str[character_index] <= '9')
 	{
-		result = result * 10 + (str[i] - '0');
-		i++;
+		conversion_result = conversion_result * 10 + 
+			(str[character_index] - '0');
+		character_index++;
 	}
-	return (result * sign);
+	return (conversion_result * sign_multiplier);
 }
 
-long long	get_time(void)
+long long	get_current_timestamp(void)
 {
-	struct timeval	tv;
+	struct timeval	time_value;
 
-	if (gettimeofday(&tv, NULL) != 0)
+	if (gettimeofday(&time_value, NULL) != 0)
 		return (-1);
-	return ((tv.tv_sec * 1000) + (tv.tv_usec / 1000));
+	return ((time_value.tv_sec * 1000) + (time_value.tv_usec / 1000));
 }
 
-long long	time_elapsed(long long start_time)
+long long	calculate_time_elapsed(long long start_time)
 {
-	return (get_time() - start_time);
+	return (get_current_timestamp() - start_time);
 }
 
-void	ft_usleep(long long time)
+void	precise_sleep_duration(long long time)
 {
-	long long	start;
-	long long	elapsed;
-	long long	remaining;
+	long long	start_time;
+	long long	elapsed_time;
+	long long	remaining_time;
 
-	start = get_time();
+	start_time = get_current_timestamp();
 	while (1)
 	{
-		elapsed = get_time() - start;
-		if (elapsed >= time)
+		elapsed_time = get_current_timestamp() - start_time;
+		if (elapsed_time >= time)
 			break ;
-		remaining = time - elapsed;
-		if (remaining > 50)
+		remaining_time = time - elapsed_time;
+		if (remaining_time > 50)
 			usleep(500);
-		else if (remaining > 10)
+		else if (remaining_time > 10)
 			usleep(200);
 		else
 			usleep(50);
 	}
 }
 
-int	is_state(t_data *data, int target_state)
+int	check_simulation_state(t_table_config *table_data, int target_state)
 {
-	int	result;
+	int	current_state_result;
 
-	pthread_mutex_lock(&data->death);
-	result = (data->sim_state == target_state);
-	pthread_mutex_unlock(&data->death);
-	return (result);
+	pthread_mutex_lock(&table_data->death_check_mutex);
+	current_state_result = (table_data->simulation_state == target_state);
+	pthread_mutex_unlock(&table_data->death_check_mutex);
+	return (current_state_result);
 }
