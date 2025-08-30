@@ -5,8 +5,8 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: isel-bar <isel-bar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2023/07/01 12:00:00 by isel-bar          #+#    #+#             */
-/*   Updated: 2025/08/29 18:44:27 by isel-bar         ###   ########.fr       */
+/*   Created: 2025/07/01 12:00:00 by isel-bar          #+#    #+#             */
+/*   Updated: 2025/08/30 04:07:56 by isel-bar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
@@ -21,34 +21,18 @@
 # include <sys/time.h>
 # include <unistd.h>
 
-typedef enum e_action_state
-{
-	STATE_THINKING,
-	STATE_EATING,
-	STATE_SLEEPING,
-	STATE_DEAD
-}					t_action_state;
+# define PHILO_THINKING 0
+# define PHILO_EATING 1
+# define PHILO_SLEEPING 2
+# define PHILO_DEAD 3
 
-typedef enum e_fork_status
-{
-	FORK_AVAILABLE,
-	FORK_IN_USE
-}					t_fork_status;
+# define FORK_AVAILABLE 0
+# define FORK_IN_USE 1
 
-typedef enum e_simulation_status
-{
-	SIM_RUNNING,
-	SIM_STOPPED,
-	SIM_ERROR,
-	SIM_COMPLETED
-}					t_simulation_status;
-
-# define SUCCESS_CODE 0
-# define ERROR_CODE 1
-# define DEATH_CHECK_INTERVAL 1000
-# define MIN_PHILOSOPHERS 1
-# define MAX_PHILOSOPHERS 200
-# define MILLISECONDS_TO_MICROSECONDS 1000
+# define SIM_RUNNING 0
+# define SIM_STOPPED 1
+# define SIM_ERROR 2
+# define SIM_COMPLETED 3
 
 # define MSG_FORK "has taken a fork"
 # define MSG_EAT "is eating"
@@ -67,91 +51,81 @@ typedef enum e_simulation_status
 # define ERR_DATA_INIT "Error: initialization failed"
 # define ERR_PHILO_INIT "Error: philosopher initialization failed"
 
-typedef struct s_dining_fork
+typedef struct s_fork
 {
-	pthread_mutex_t	fork_mutex;
-	int				fork_state;
-	int				owner_philosopher_id;
-}					t_dining_fork;
+	pthread_mutex_t	mutex;
+	int				state;
+	int				owner_id;
+}					t_fork;
 
-typedef struct s_philosopher_data
+typedef struct s_philo
 {
-	int					unique_number;
-	int					current_state;
-	int					left_fork_index;
-	int					right_fork_index;
-	int					total_meals_eaten;
-	long long			last_meal_timestamp;
-	pthread_t			philosopher_thread;
-	struct s_table_config	*shared_table_data;
-}						t_philosopher_data;
+	int				id;
+	int				state;
+	int				left_fork;
+	int				right_fork;
+	int				eat_count;
+	long long		last_eat_time;
+	pthread_t		thread;
+	struct s_data	*data;
+}					t_philo;
 
-typedef struct s_table_config
+typedef struct s_data
 {
-	int					number_of_diners;
-	int					time_before_death;
-	int					eating_duration;
-	int					sleeping_duration;
-	int					required_meal_count;
-	int					death_flag_detected;
-	int					simulation_state;
-	int					single_philosopher_mode;
-	long long			simulation_start_time;
-	t_dining_fork		*fork_mutex_array;
-	pthread_mutex_t		print_output_mutex;
-	pthread_mutex_t		death_check_mutex;
-	pthread_mutex_t		start_synchronization_mutex;
-	pthread_mutex_t		meal_tracking_mutex;
-	pthread_t			monitor_thread;
-	t_philosopher_data	*philosophers_array;
-}						t_table_config;
+	int				num_philos;
+	int				time_to_die;
+	int				time_to_eat;
+	int				time_to_sleep;
+	int				must_eat;
+	int				is_dead;
+	int				sim_state;
+	int				single_philo;
+	long long		start_time;
+	t_fork			*forks;
+	pthread_mutex_t	print;
+	pthread_mutex_t	death;
+	pthread_mutex_t	start_lock;
+	pthread_mutex_t	meal_lock;
+	pthread_t		monitor_thread;
+	t_philo			*philos;
+}					t_data;
 
-int					free_simulation_resources(t_table_config *table_data);
+int					free_resources(t_data *data);
 int					cleanup_single_mutex(pthread_mutex_t *mutex);
-long long			get_current_timestamp(void);
-int					convert_string_to_integer(const char *str);
-long long			calculate_time_elapsed(long long start_time);
-void				precise_sleep_duration(long long time);
-int					check_simulation_state(t_table_config *table_data, 
-						int target_state);
-void				release_both_dining_forks(t_philosopher_data *philosopher, 
-						int first_fork, int second_fork);
-int					check_death_flag_status(t_table_config *table_data);
-int					execute_eating_process(t_philosopher_data *philosopher);
-int					attempt_both_forks_acquisition(
-						t_philosopher_data *philosopher);
-int					verify_all_philosophers_fed(t_table_config *table_data);
-void				handle_simulation_completion(t_table_config *table_data);
-void				begin_thinking_phase(t_philosopher_data *philosopher);
-void				adjust_thinking_duration(t_philosopher_data *philosopher);
-int					check_fork_availability(t_philosopher_data *philosopher, 
-						int fork_index);
-int					acquire_fork_safely(t_philosopher_data *philosopher, 
-						int fork_index);
-int					check_death_timing(t_philosopher_data *philosopher);
-long long			calculate_time_since_last_meal(
-						t_philosopher_data *philosopher);
-void				handle_simulation_termination(t_table_config *table_data);
-int					initialize_simulation_parameters(t_table_config *table_data,
-						int argc, char **argv);
-int					initialize_mutex_resources(t_table_config *table_data);
-int					initialize_fork_mutexes(t_table_config *table_data);
-int					initialize_philosophers_array(t_table_config *table_data);
-void				*monitor_simulation_routine(void *arg);
-int					handle_thread_creation_error(t_table_config *table_data, 
-						char *err_msg);
-int					get_current_simulation_state(t_table_config *table_data);
-void				*philosopher_routine(void *arg);
-void				execute_sleep_and_think_cycle(
-						t_philosopher_data *philosopher);
-int					attempt_fork_acquisition(t_philosopher_data *philosopher);
-void				print_philosopher_state(t_philosopher_data *philosopher, 
-						char *status);
-int					check_philosopher_death(t_philosopher_data *philosopher);
-int					set_simulation_state(t_table_config *table_data, int state);
-void				enter_sleeping_state(t_philosopher_data *philosopher);
-int					cleanup_fork_resources(t_dining_fork *forks, int count);
-int					validate_command_arguments(int argc, char **argv);
-int					parse_simulation_arguments(t_table_config *table_data, 
-						int argc, char **argv);
+long long			get_time(void);
+int					ft_atoi(const char *str);
+long long			time_elapsed(long long start_time);
+void				ft_usleep(long long time);
+int					is_state(t_data *data, int target_state);
+void				release_both_forks(t_philo *philo, int first_fork,
+						int second_fork);
+int					is_dead(t_data *data);
+int					eat(t_philo *philo);
+int					check_and_take_both_forks_safe(t_philo *philo);
+int					check_all_ate(t_data *data);
+void				handle_meal_completion(t_data *data);
+void				philo_think(t_philo *philo);
+void				adjust_think_time(t_philo *philo);
+int					can_take_fork(t_philo *philo, int fork_index);
+int					take_fork_safe(t_philo *philo, int fork_index);
+int					is_time_to_die(t_philo *philo);
+long long			time_since_last_meal(t_philo *philo);
+void				handle_termination(t_data *data);
+int					init_data(t_data *data, int argc, char **argv);
+int					init_mutex(t_data *data);
+int					init_forks(t_data *data);
+int					init_philos(t_data *data);
+void				*monitor_routine(void *arg);
+int					handle_thread_creation_error(t_data *data, char *err_msg);
+int					get_simulation_state(t_data *data);
+void				*philo_routine(void *arg);
+void				sleep_and_think(t_philo *philo);
+int					try_get_forks(t_philo *philo);
+void				print_status(t_philo *philo, char *status);
+int					check_death(t_philo *philo);
+int					set_simulation_state(t_data *data, int state);
+void				philo_sleep(t_philo *philo);
+int					cleanup_forks(t_fork *forks, int count);
+int					validate_args(int argc, char **argv);
+int					parse_args(t_data *data, int argc, char **argv);
 #endif

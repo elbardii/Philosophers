@@ -5,30 +5,29 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: isel-bar <isel-bar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/04/12 15:24:22 by isel-bar          #+#    #+#             */
-/*   Updated: 2025/08/29 18:44:54 by isel-bar         ###   ########.fr       */
+/*   Created: 2025/07/01 12:00:00 by isel-bar          #+#    #+#             */
+/*   Updated: 2025/08/30 04:03:16 by isel-bar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "philo.h"
 
-int	validate_command_arguments(int argc, char **argv)
+int	validate_args(int argc, char **argv)
 {
-	int	argument_index;
-	int	character_index;
+	int	i;
+	int	j;
 
-	argument_index = 1;
-	while (argument_index < argc)
+	i = 1;
+	while (i < argc)
 	{
-		character_index = 0;
-		while (argv[argument_index][character_index])
+		j = 0;
+		while (argv[i][j])
 		{
-			if (argv[argument_index][character_index] < '0' || 
-				argv[argument_index][character_index] > '9')
+			if (argv[i][j] < '0' || argv[i][j] > '9')
 				return (1);
-			character_index++;
+			j++;
 		}
-		argument_index++;
+		i++;
 	}
 	return (0);
 }

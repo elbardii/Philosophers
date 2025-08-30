@@ -5,133 +5,119 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: isel-bar <isel-bar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/04/12 15:21:27 by isel-bar          #+#    #+#             */
-/*   Updated: 2025/08/29 18:44:54 by isel-bar         ###   ########.fr       */
+/*   Created: 2025/07/01 12:00:00 by isel-bar          #+#    #+#             */
+/*   Updated: 2025/08/30 04:01:38 by isel-bar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "philo.h"
 
-int	initialize_simulation_parameters(t_table_config *table_data, int argc, 
-		char **argv)
+int	init_data(t_data *data, int argc, char **argv)
 {
-	if (validate_command_arguments(argc, argv))
+	if (validate_args(argc, argv))
 		return (1);
-	if (parse_simulation_arguments(table_data, argc, argv))
+	if (parse_args(data, argc, argv))
 		return (1);
-	table_data->death_flag_detected = 0;
-	table_data->simulation_state = SIM_RUNNING;
-	if (table_data->number_of_diners == 1)
-		table_data->single_philosopher_mode = 1;
+	data->is_dead = 0;
+	data->sim_state = SIM_RUNNING;
+	if (data->num_philos == 1)
+		data->single_philo = 1;
 	else
-		table_data->single_philosopher_mode = 0;
-	if (initialize_mutex_resources(table_data) != 0)
+		data->single_philo = 0;
+	if (init_mutex(data) != 0)
 		return (1);
-	if (initialize_fork_mutexes(table_data) != 0)
+	if (init_forks(data) != 0)
 	{
-		cleanup_single_mutex(&table_data->print_output_mutex);
-		cleanup_single_mutex(&table_data->death_check_mutex);
-		cleanup_single_mutex(&table_data->start_synchronization_mutex);
-		cleanup_single_mutex(&table_data->meal_tracking_mutex);
+		cleanup_single_mutex(&data->print);
+		cleanup_single_mutex(&data->death);
+		cleanup_single_mutex(&data->start_lock);
+		cleanup_single_mutex(&data->meal_lock);
 		return (1);
 	}
 	return (0);
 }
 
-int	initialize_mutex_resources(t_table_config *table_data)
+int	init_mutex(t_data *data)
 {
-	if (pthread_mutex_init(&table_data->print_output_mutex, NULL) != 0)
+	if (pthread_mutex_init(&data->print, NULL) != 0)
 		return (1);
-	if (pthread_mutex_init(&table_data->death_check_mutex, NULL) != 0)
-		return (cleanup_single_mutex(&table_data->print_output_mutex), 1);
-	if (pthread_mutex_init(&table_data->start_synchronization_mutex, 
-		NULL) != 0)
+	if (pthread_mutex_init(&data->death, NULL) != 0)
+		return (cleanup_single_mutex(&data->print), 1);
+	if (pthread_mutex_init(&data->start_lock, NULL) != 0)
 	{
-		cleanup_single_mutex(&table_data->print_output_mutex);
-		cleanup_single_mutex(&table_data->death_check_mutex);
+		cleanup_single_mutex(&data->print);
+		cleanup_single_mutex(&data->death);
 		return (1);
 	}
-	if (pthread_mutex_init(&table_data->meal_tracking_mutex, NULL) != 0)
+	if (pthread_mutex_init(&data->meal_lock, NULL) != 0)
 	{
-		cleanup_single_mutex(&table_data->print_output_mutex);
-		cleanup_single_mutex(&table_data->death_check_mutex);
-		cleanup_single_mutex(&table_data->start_synchronization_mutex);
+		cleanup_single_mutex(&data->print);
+		cleanup_single_mutex(&data->death);
+		cleanup_single_mutex(&data->start_lock);
 		return (1);
 	}
 	return (0);
 }
 
-int	initialize_fork_mutexes(t_table_config *table_data)
+int	init_forks(t_data *data)
 {
-	int	fork_index;
+	int	i;
 
-	table_data->fork_mutex_array = malloc(sizeof(t_dining_fork) 
-		* table_data->number_of_diners);
-	if (!table_data->fork_mutex_array)
+	data->forks = malloc(sizeof(t_fork) * data->num_philos);
+	if (!data->forks)
 		return (1);
-	fork_index = 0;
-	while (fork_index < table_data->number_of_diners)
+	i = 0;
+	while (i < data->num_philos)
 	{
-		if (pthread_mutex_init(&table_data->fork_mutex_array[fork_index].
-			fork_mutex, NULL) != 0)
+		if (pthread_mutex_init(&data->forks[i].mutex, NULL) != 0)
 		{
-			while (--fork_index >= 0)
-				cleanup_single_mutex(&table_data->
-					fork_mutex_array[fork_index].fork_mutex);
-			free(table_data->fork_mutex_array);
+			while (--i >= 0)
+				cleanup_single_mutex(&data->forks[i].mutex);
+			free(data->forks);
 			return (1);
 		}
-		table_data->fork_mutex_array[fork_index].fork_state = FORK_AVAILABLE;
-		table_data->fork_mutex_array[fork_index].owner_philosopher_id = -1;
-		fork_index++;
+		data->forks[i].state = FORK_AVAILABLE;
+		data->forks[i].owner_id = -1;
+		i++;
 	}
 	return (0);
 }
 
-int	initialize_philosophers_array(t_table_config *table_data)
+int	init_philos(t_data *data)
 {
-	int	philosopher_index;
+	int	i;
 
-	table_data->philosophers_array = malloc(sizeof(t_philosopher_data) 
-		* table_data->number_of_diners);
-	if (!table_data->philosophers_array)
+	data->philos = malloc(sizeof(t_philo) * data->num_philos);
+	if (!data->philos)
 		return (1);
-	philosopher_index = 0;
-	while (philosopher_index < table_data->number_of_diners)
+	i = 0;
+	while (i < data->num_philos)
 	{
-		table_data->philosophers_array[philosopher_index].unique_number 
-			= philosopher_index + 1;
-		table_data->philosophers_array[philosopher_index].current_state 
-			= STATE_THINKING;
-		table_data->philosophers_array[philosopher_index].left_fork_index 
-			= philosopher_index;
-		table_data->philosophers_array[philosopher_index].right_fork_index 
-			= (philosopher_index + 1) % table_data->number_of_diners;
-		table_data->philosophers_array[philosopher_index].total_meals_eaten = 0;
-		table_data->philosophers_array[philosopher_index].last_meal_timestamp 
-			= 0;
-		table_data->philosophers_array[philosopher_index].shared_table_data 
-			= table_data;
-		philosopher_index++;
+		data->philos[i].id = i + 1;
+		data->philos[i].state = PHILO_THINKING;
+		data->philos[i].left_fork = i;
+		data->philos[i].right_fork = (i + 1) % data->num_philos;
+		data->philos[i].eat_count = 0;
+		data->philos[i].last_eat_time = 0;
+		data->philos[i].data = data;
+		i++;
 	}
 	return (0);
 }
 
-int	parse_simulation_arguments(t_table_config *table_data, int argc, 
-		char **argv)
+int	parse_args(t_data *data, int argc, char **argv)
 {
-	table_data->number_of_diners = convert_string_to_integer(argv[1]);
-	table_data->time_before_death = convert_string_to_integer(argv[2]);
-	table_data->eating_duration = convert_string_to_integer(argv[3]);
-	table_data->sleeping_duration = convert_string_to_integer(argv[4]);
+	data->num_philos = ft_atoi(argv[1]);
+	data->time_to_die = ft_atoi(argv[2]);
+	data->time_to_eat = ft_atoi(argv[3]);
+	data->time_to_sleep = ft_atoi(argv[4]);
 	if (argc == 6)
-		table_data->required_meal_count = convert_string_to_integer(argv[5]);
+		data->must_eat = ft_atoi(argv[5]);
 	else
-		table_data->required_meal_count = -1;
-	if (table_data->number_of_diners <= 0 || table_data->time_before_death <= 0
-		|| table_data->eating_duration <= 0 
-		|| table_data->sleeping_duration <= 0 || (argc == 6
-			&& table_data->required_meal_count <= 0))
+		data->must_eat = -1;
+	if (data->num_philos <= 0 || data->time_to_die <= 0
+		|| data->time_to_eat <= 0 || data->time_to_sleep <= 0 || (argc == 6
+			&& data->must_eat <= 0))
 		return (1);
 	return (0);
 }

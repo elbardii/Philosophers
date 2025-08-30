@@ -5,81 +5,75 @@
 /*                                                    +:+ +:+         +:+     */
 /*   By: isel-bar <isel-bar@student.42.fr>          +#+  +:+       +#+        */
 /*                                                +#+#+#+#+#+   +#+           */
-/*   Created: 2025/04/12 15:36:36 by isel-bar          #+#    #+#             */
-/*   Updated: 2025/08/30 02:47:35 by isel-bar         ###   ########.fr       */
+/*   Created: 2025/07/01 12:00:00 by isel-bar          #+#    #+#             */
+/*   Updated: 2025/08/30 04:02:06 by isel-bar         ###   ########.fr       */
 /*                                                                            */
 /* ************************************************************************** */
 
 #include "philo.h"
 
-int	get_current_simulation_state(t_table_config *table_data)
+int	get_simulation_state(t_data *data)
 {
-	int	current_state;
+	int	state;
 
-	pthread_mutex_lock(&table_data->death_check_mutex);
-	current_state = table_data->simulation_state;
-	pthread_mutex_unlock(&table_data->death_check_mutex);
-	return (current_state);
+	pthread_mutex_lock(&data->death);
+	state = data->sim_state;
+	pthread_mutex_unlock(&data->death);
+	return (state);
 }
 
-int	set_simulation_state(t_table_config *table_data, int state)
+int	set_simulation_state(t_data *data, int state)
 {
-	pthread_mutex_lock(&table_data->death_check_mutex);
-	table_data->simulation_state = state;
+	pthread_mutex_lock(&data->death);
+	data->sim_state = state;
 	if (state == SIM_STOPPED)
-		table_data->death_flag_detected = 1;
-	pthread_mutex_unlock(&table_data->death_check_mutex);
+		data->is_dead = 1;
+	pthread_mutex_unlock(&data->death);
 	return (0);
 }
 
-void	handle_simulation_termination(t_table_config *table_data)
+void	handle_termination(t_data *data)
 {
-	int	philosopher_index;
+	int	i;
 
-	pthread_join(table_data->monitor_thread, NULL);
-	philosopher_index = 0;
-	while (philosopher_index < table_data->number_of_diners)
+	pthread_join(data->monitor_thread, NULL);
+	i = 0;
+	while (i < data->num_philos)
 	{
-		pthread_join(table_data->philosophers_array[philosopher_index].
-			philosopher_thread, NULL);
-		philosopher_index++;
+		pthread_join(data->philos[i].thread, NULL);
+		i++;
 	}
 }
 
-
-void	handle_simulation_completion(t_table_config *table_data)
+void	handle_meal_completion(t_data *data)
 {
-	pthread_mutex_lock(&table_data->print_output_mutex);
+	pthread_mutex_lock(&data->print);
 	printf("%lld All philosophers have eaten enough\n",
-		calculate_time_elapsed(table_data->simulation_start_time));
-	pthread_mutex_unlock(&table_data->print_output_mutex);
-	set_simulation_state(table_data, SIM_COMPLETED);
+		time_elapsed(data->start_time));
+	pthread_mutex_unlock(&data->print);
+	set_simulation_state(data, SIM_COMPLETED);
 }
 
-int	attempt_fork_acquisition(t_philosopher_data *current_philosopher)
+int	try_get_forks(t_philo *philo)
 {
-	int	acquisition_attempts;
-	int	maximum_attempts;
+	int	attempts;
+	int	max_attempts;
 
-	acquisition_attempts = 0;
-	maximum_attempts = 100;
-	while (!check_philosopher_death(current_philosopher)
-		&& get_current_simulation_state(current_philosopher->
-			shared_table_data) == SIM_RUNNING)
+	attempts = 0;
+	max_attempts = 100;
+	while (!check_death(philo)
+		&& get_simulation_state(philo->data) == SIM_RUNNING)
 	{
-		if (check_fork_availability(current_philosopher, 
-			current_philosopher->left_fork_index) && 
-			check_fork_availability(current_philosopher,
-			current_philosopher->right_fork_index))
+		if (can_take_fork(philo, philo->left_fork) && can_take_fork(philo,
+				philo->right_fork))
 			return (1);
-		if (++acquisition_attempts > maximum_attempts)
+		if (++attempts > max_attempts)
 		{
-			precise_sleep_duration(current_philosopher->shared_table_data->
-				eating_duration / 10);
-			acquisition_attempts = 0;
+			ft_usleep(philo->data->time_to_eat / 10);
+			attempts = 0;
 		}
 		else
-			precise_sleep_duration(1);
+			ft_usleep(1);
 	}
 	return (0);
 }
